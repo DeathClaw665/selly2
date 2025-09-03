@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kalkulator listew + narożniki (bonie naprzemienne)</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+<header class="container">
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+    <div>
+      <h1>Kalkulator listew + narożniki</h1>
+      <div class="sub">Okna + narożniki. Narożniki mają bonie z opcją <strong>naprzemiennych</strong> wymiarów (A/B/A/B…).</div>
+    </div>
+    <div style="text-align: right;">
+      <button id="apiKeyBtn" type="button" class="btn btn-secondary btn-sm" onclick="setSellyCredentials()" style="margin-bottom: 4px;">🔑 Konfiguracja Selly.pl</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="testSellyAPI()" style="margin-bottom: 4px; margin-left: 4px;">🧪 Test API</button>
+      <div id="apiStatus" class="sub" style="font-size: 11px;"></div>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- DWA BLOKI OBOK SIEBIE (domyślnie zwinięte) -->
+  <div class="grid-2">
+    <!-- Presety -->
+    <section class="card" id="presetsCard">
+      <div class="head">
+        <span>Presety i szybkie dodawanie</span>
+        <button type="button" class="btn btn-ghost btn-sm coll-btn" aria-expanded="false" aria-controls="presetsBody">▸ Rozwiń</button>
+      </div>
+      <div class="body collapsible collapsed" id="presetsBody">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+          <div class="field" style="min-width:280px">
+            <select id="presetSelect"></select>
+          </div>
+          <button id="addPresetBtn" type="button" class="btn btn-primary btn-sm">➕ Dodaj z presetu</button>
+        </div>
+        <div id="presetQuick" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <div class="sub" style="margin-top:8px">Wybierz preset z listy lub kliknij szybki przycisk, aby dodać kolejne okno.</div>
+
+        <hr style="border:none;border-top:1px dashed var(--border);margin:10px 0">
+        <div class="row" style="align-items:end">
+          <div>
+            <label>Nazwa nowego presetu</label>
+            <div class="field"><input type="text" id="newPresetName" placeholder="np. Okno balkonowe"></div>
+          </div>
+          <div>
+            <label style="visibility:hidden">.</label>
+            <button id="saveFromActive" type="button" class="btn btn-ghost btn-sm">⭐ Zapisz z wybranego okna</button>
+          </div>
+        </div>
+        <div class="sub" style="margin-top:6px">Moje presety:</div>
+        <div id="myPresetsList" style="display:grid;gap:6px"></div>
+      </div>
+    </section>
+
+    <!-- Edycja zbiorcza -->
+    <section class="card" id="bulkCard">
+      <div class="head">
+        <span>Edycja zbiorcza</span>
+        <button type="button" class="btn btn-ghost btn-sm coll-btn" aria-expanded="false" aria-controls="bulkBody">▸ Rozwiń</button>
+      </div>
+      <div class="body collapsible collapsed" id="bulkBody">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+          <button id="applyBulk" type="button" class="btn btn-secondary btn-sm">⚙️ Zastosuj do wszystkich</button>
+        </div>
+        <div class="row-6 row">
+          <div>
+            <label>Dł. 1 szt. listwy (cm)</label>
+            <div class="field"><input type="number" id="bulkLenListwa" placeholder="bez zmian" min="10" step="1"></div>
+          </div>
+          <div>
+            <label>Cena 1 szt. listwy (zł)</label>
+            <div class="field"><input type="number" id="bulkPriceListwa" placeholder="bez zmian" min="0" step="0.01"></div>
+          </div>
+          <div>
+            <label>Rabat (%)</label>
+            <div class="field"><input type="number" id="bulkDiscount" placeholder="bez zmian" min="0" max="100" step="1"></div>
+          </div>
+          <div>
+            <label>Gzyms dolny</label>
+            <div class="field">
+              <select id="bulkGDownAction">
+                <option value="none" selected>Bez zmian</option>
+                <option value="on">Włącz</option>
+                <option value="off">Wyłącz</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label>Dł. gzymsu dolnego (cm)</label>
+            <div class="field"><input type="number" id="bulkLenGd" placeholder="bez zmian" min="10" step="1"></div>
+          </div>
+          <div>
+            <label>Cena gzymsu dolnego (zł)</label>
+            <div class="field"><input type="number" id="bulkPriceGd" placeholder="bez zmian" min="0" step="0.01"></div>
+          </div>
+
+          <div>
+            <label>Gzyms górny</label>
+            <div class="field">
+              <select id="bulkGUpAction">
+                <option value="none" selected>Bez zmian</option>
+                <option value="on">Włącz</option>
+                <option value="off">Wyłącz</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label>Dł. gzymsu górnego (cm)</label>
+            <div class="field"><input type="number" id="bulkLenGu" placeholder="bez zmian" min="10" step="1"></div>
+          </div>
+          <div>
+            <label>Cena gzymsu górnego (zł)</label>
+            <div class="field"><input type="number" id="bulkPriceGu" placeholder="bez zmian" min="0" step="0.01"></div>
+          </div>
+        </div>
+        <div class="sub" style="margin-top:8px">Puste pola = bez zmian.</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Lista okien -->
+  <section class="card" style="margin-top:16px">
+    <div class="head">
+      <span>Okna</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button id="addWin" type="button" class="btn btn-primary">➕ Dodaj okno</button>
+        <button id="addCorner" type="button" class="btn btn-secondary">🧱 Dodaj narożnik</button>
+        <button id="renumber" type="button" class="btn btn-ghost btn-sm" title="Uporządkuj numerację"># Renumeruj</button>
+      </div>
+    </div>
+    <div class="body">
+      <div id="windows"></div>
+    </div>
+  </section>
+
+  <!-- Lista narożników (bonie) -->
+  <section class="card" style="margin-top:16px">
+    <div class="head">
+      <span>Narożniki (bonie)</span>
+    </div>
+    <div class="body">
+      <div id="corners"></div>
+    </div>
+  </section>
+
+  <!-- Podsumowanie narożników -->
+  <section class="card" style="margin-top:12px">
+    <div class="head">
+      <span>Podsumowanie narożników</span>
+    </div>
+    <div class="body">
+      <table id="cornersTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Nazwa</th>
+            <th>Wysokość ściany</th>
+            <th>Ilość ścian</th>
+            <th>Wys. boni</th>
+            <th>Szer. boni</th>
+            <th>Naprzemienne</th>
+            <th>Wys. 2. boni</th>
+            <th>Szer. 2. boni</th>
+            <th>Od góry</th>
+            <th>Od dołu</th>
+            <th>Odstęp (pionowy)</th>
+            <th>Szt. / 1 śc.</th>
+            <th>Szt. łącznie</th>
+            <th>Cena 1. boni</th>
+            <th>Cena 2. boni</th>
+            <th>Koszt łącznie</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="13" style="text-align:right;font-weight:700">RAZEM</td>
+            <td id="tBonie">0</td>
+            <td></td>
+            <td></td>
+            <td id="tBonieCost">0,00 zł</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<!-- Podsumowanie (okna) -->
+<section class="container" style="margin-top:16px">
+  <section class="card" id="summary">
+    <div class="head">
+      <span>Podsumowanie</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="exportCSV" type="button" class="btn btn-primary btn-sm">⬇️ Eksport CSV</button>
+        <button id="showCuts" type="button" class="btn btn-secondary btn-sm">✂️ Plan cięć</button>
+        <button id="printPDF" type="button" class="btn btn-secondary btn-sm">🖨️ PDF / Drukuj</button>
+        <button id="saveJSON" type="button" class="btn btn-primary btn-sm">💾 Zapisz wycenę</button>
+        <button id="loadJSON" type="button" class="btn btn-secondary btn-sm">📂 Wczytaj wycenę</button>
+        <button id="shareLink" type="button" class="btn btn-primary btn-sm">🔗 Udostępnij link</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
+      </div>
+    </div>
+    <div class="body">
+      <table id="summaryTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Nazwa</th>
+            <th>Wymiary</th>
+            <th>Ilość</th>
+            <th>Rama</th>
+            <th>Gzyms dolny</th>
+            <th>Gzyms górny</th>
+            <th>Dł. listwy</th>
+            <th>Szt. listew</th>
+            <th>Dł. gzymsu dolnego</th>
+            <th>Szt. gzymsu dolnego</th>
+            <th>Dł. gzymsu górnego</th>
+            <th>Szt. gzymsu górnego</th>
+            <th>Zworniki</th>
+            <th>Wsporniki ↑</th>
+            <th>Wsporniki ↓</th>
+            <th>Rabat</th>
+            <th>Koszt</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3">RAZEM</td>
+            <td id="tQty">0</td>
+            <td colspan="2"></td>
+            <td></td>
+            <td id="tLenL">0</td>
+            <td id="tPiecesL">0</td>
+            <td id="tLenGd">0</td>
+            <td id="tPiecesGd">0</td>
+            <td id="tLenGu">0</td>
+            <td id="tPiecesGu">0</td>
+            <td id="tZw">0</td>
+            <td id="tWsTop">0</td>
+            <td id="tWsBot">0</td>
+            <td>—</td>
+            <td id="tCost">0,00 zł</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <!-- Rabat całościowy -->
+      <div class="row" style="margin-top:12px">
+        <div>
+          <label>Rabat całościowy na całe zamówienie</label>
+          <div class="field">
+            <input type="number" id="globalDiscount" value="0" min="0" max="100" step="1"/>
+            <span class="addon">%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Parametry planu cięć -->
+      <div class="row-4 row" style="margin-top:12px">
+        <div>
+          <label>Rzaz piły (kerf)</label>
+          <div class="field"><input type="number" id="kerf" value="0" min="0" step="0.5"/><span class="addon">mm</span></div>
+        </div>
+        <div>
+          <label>Naddatek na docinkę</label>
+          <div class="field"><input type="number" id="overcut" value="0" min="0" step="0.5"/><span class="addon">mm/szt.</span></div>
+        </div>
+        <div>
+          <label>Jednostki planu</label>
+          <div class="field">
+            <select id="units" style="border:0;padding:10px 12px;width:100%">
+              <option value="cm" selected>Centymetry</option>
+              <option value="mm">Milimetry</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</section>
+
+<template id="winTemplate">
+  <div class="card" data-id="">
+    <div class="head">Okno #<span class="num"></span>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="savePreset btn btn-ghost btn-sm" type="button" title="Zapisz to okno jako preset">Zapisz preset</button>
+        <button class="clone btn btn-secondary btn-sm" type="button" title="Duplikuj to okno">Duplikuj</button>
+        <button class="remove btn btn-danger btn-sm" type="button" title="Usuń to okno">Usuń</button>
+      </div>
+    </div>
+    <div class="body">
+
+      <!-- Wymiary + Nazwa -->
+      <div class="section">
+        <div class="section-title">Nazwa i wymiary</div>
+        <div class="section-body expanded">
+          <div class="row-4 row">
+            <div>
+              <label>Nazwa okna</label>
+              <div class="field"><input type="text" class="name" placeholder="np. Salon" /></div>
+            </div>
+            <div>
+              <label>Szerokość</label>
+              <div class="field"><input type="number" class="w" value="120" min="1" step="1"/><span class="addon">cm</span></div>
+            </div>
+            <div>
+              <label>Wysokość</label>
+              <div class="field"><input type="number" class="h" value="140" min="1" step="1"/><span class="addon">cm</span></div>
+            </div>
+            <div>
+              <label>Ilość</label>
+              <div class="field"><input type="number" class="qty" value="1" min="1" step="1"/></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rama -->
+      <div class="section">
+        <div class="section-title">Rama</div>
+        <div class="section-body expanded">
+          <div class="seg">
+            <label><input type="radio" name="frame__ID__" value="full" checked> Pełna</label>
+            <label><input type="radio" name="frame__ID__" value="toplr"> Góra + boki</label>
+            <label><input type="radio" name="frame__ID__" value="sides"> Boki</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gzymsy -->
+      <div class="section">
+        <div class="section-title collapsed">Gzymsy</div>
+        <div class="section-body collapsed">
+          <div class="gzyms-row">
+            <label class="check">
+              <input type="checkbox" class="gzymsDown"> Gzyms pod oknem
+              <span class="pill prodNameGd" aria-live="polite" style="display:none"></span>
+            </label>
+            <label class="check">
+              <input type="checkbox" class="gzymsUp"> Gzyms nad oknem
+              <span class="pill prodNameGu" aria-live="polite" style="display:none"></span>
+            </label>
+          </div>
+
+          <!-- pickery Selly -->
+          <div class="row">
+            <div>
+              <label>Produkt gzymsu dolnego (Selly)</label>
+              <div class="field picker"><input type="text" class="pickGd" placeholder="Wpisz nazwę produktu..." /></div>
+            </div>
+            <div>
+              <label>Produkt gzymsu górnego (Selly)</label>
+              <div class="field picker"><input type="text" class="pickGu" placeholder="Wpisz nazwę produktu..." /></div>
+            </div>
+          </div>
+
+          <div class="gyms-config grpDown hidden">
+            <div>
+              <label>Dł. 1 szt. gzymsu dolnego</label>
+              <div class="field"><input type="number" class="lenGzymsDown" value="200" min="10" step="1"/><span class="addon">cm</span></div>
+            </div>
+            <div>
+              <label>Cena 1 szt. gzymsu dolnego</label>
+              <div class="field"><input type="number" class="priceGzymsDown" value="80" min="0" step="0.01"/><span class="addon">zł</span></div>
+            </div>
+            <label class="check" style="grid-column:1/-1;margin-top:4px">
+              <input type="checkbox" class="addWasteDown"/> +15% długości na zacięcia
+            </label>
+          </div>
+
+          <div class="gyms-config grpUp hidden">
+            <div>
+              <label>Dł. 1 szt. gzymsu górnego</label>
+              <div class="field"><input type="number" class="lenGzymsUp" value="200" min="10" step="1"/><span class="addon">cm</span></div>
+            </div>
+            <div>
+              <label>Cena 1 szt. gzymsu górnego</label>
+              <div class="field"><input type="number" class="priceGzymsUp" value="80" min="0" step="0.01"/><span class="addon">zł</span></div>
+            </div>
+            <label class="check" style="grid-column:1/-1;margin-top:4px">
+              <input type="checkbox" class="addWasteUp"/> +15% długości na zacięcia
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dodatki -->
+      <div class="section">
+        <div class="section-title collapsed">Dodatki (zwornik i wsporniki)</div>
+        <div class="section-body collapsed">
+          <div class="addons-config">
+            <label class="check"><input type="checkbox" class="keystone"> Zwornik (szt.)</label>
+            <div>
+              <label>Ilość zworników</label>
+              <div class="field"><input type="number" class="qtyKeystone" value="1" min="1" step="1"/><span class="addon">szt.</span></div>
+            </div>
+            <div>
+              <label>Cena 1 zwornika</label>
+              <div class="field"><input type="number" class="priceKeystone" value="120" min="0" step="0.01"/><span class="addon">zł</span></div>
+            </div>
+
+            <label class="check"><input type="checkbox" class="brTop"> Wsporniki górne (szt.)</label>
+            <div>
+              <label>Ilość wsporników górnych</label>
+              <div class="field"><input type="number" class="qtyBrTop" value="2" min="1" step="1"/><span class="addon">szt.</span></div>
+            </div>
+            <div>
+              <label>Cena 1 wspornika górnego</label>
+              <div class="field"><input type="number" class="priceBrTop" value="60" min="0" step="0.01"/><span class="addon">zł</span></div>
+            </div>
+
+            <label class="check"><input type="checkbox" class="brBottom"> Wsporniki dolne (szt.)</label>
+            <div>
+              <label>Ilość wsporników dolnych</label>
+              <div class="field"><input type="number" class="qtyBrBottom" value="2" min="1" step="1"/><span class="addon">szt.</span></div>
+            </div>
+            <div>
+              <label>Cena 1 wspornika dolnego</label>
+              <div class="field"><input type="number" class="priceBrBottom" value="60" min="0" step="0.01"/><span class="addon">zł</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ceny i rabaty -->
+      <div class="section">
+        <div class="section-title collapsed">Ceny i rabaty</div>
+        <div class="section-body collapsed">
+
+          <!-- PICKER LISTWY (Selly) -->
+          <div class="row">
+            <div>
+              <label>Produkt listwy (Selly)</label>
+              <div class="field picker"><input type="text" class="pickListwa" placeholder="Wpisz nazwę produktu..." /></div>
+              <div class="tiny" style="margin-top:4px"><span class="pill prodNameL" style="display:none"></span></div>
+            </div>
+          </div>
+
+          <div class="row-4 row">
+            <div>
+              <label>Dł. 1 szt. listwy</label>
+              <div class="field"><input type="number" class="lenListwa" value="200" min="10" step="1"/><span class="addon">cm</span></div>
+            </div>
+            <div>
+              <label>Cena 1 szt. listwy</label>
+              <div class="field"><input type="number" class="priceListwa" value="50" min="0" step="0.01"/><span class="addon">zł</span></div>
+            </div>
+            <div>
+              <label>Rabat</label>
+              <div class="field"><input type="number" class="discount" value="0" min="0" max="100" step="1"/><span class="addon">%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Podgląd -->
+      <div class="section">
+        <div class="section-title">Podgląd</div>
+        <div class="section-body expanded">
+          <div class="svg-wrap">
+            <svg viewBox="0 0 320 240" class="preview" aria-label="Podgląd okna" role="img"></svg>
+            <div class="legend">
+              <span><i class="listwa"></i> Listwa</span>
+              <span><i class="gzyms"></i> Gzyms</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub" style="margin-top:8px" aria-live="polite">
+        Obwód listwy (dla 1 okna): <strong class="perimeter">0 cm</strong>
+        • Sztuk listwy: <strong class="piecesL">0</strong>
+      </div>
+
+      <label class="check onlyMulti" style="margin-top:6px;display:none" title="Liczy wszystkie listwy i gzymsy dla wielu sztuk tego samego okna jakby były cięte z jednej sztangi (może zmienić koszt).">
+        <input type="checkbox" class="aggAsOne"/> Zlicz to okno jako jedno (listwy + gzymsy)
+      </label>
+
+      <div class="sub" style="margin-top:6px" aria-live="polite">
+        Gzyms dolny: <strong class="gzymsDownInfo">brak</strong>
+        • Gzyms górny: <strong class="gzymsUpInfo">brak</strong>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- Szablon narożnika (bonie, z naprzemiennymi) -->
+<template id="cornerTemplate">
+  <div class="card" data-corner-id="">
+    <div class="head">
+      Narożnik #<span class="num"></span>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="cloneCorner btn btn-secondary btn-sm" type="button" title="Duplikuj">Duplikuj</button>
+        <button class="removeCorner btn btn-danger btn-sm" type="button" title="Usuń">Usuń</button>
+      </div>
+    </div>
+    <div class="body">
+      <!-- Nazwa i parametry ściany -->
+      <div class="section">
+        <div class="section-title">Nazwa i ściana</div>
+        <div class="section-body expanded">
+          <div class="row-4 row">
+            <div>
+              <label>Nazwa narożnika</label>
+              <div class="field"><input type="text" class="cName" placeholder="np. Elewacja front"/></div>
+            </div>
+            <div>
+              <label>Wysokość ściany</label>
+              <div class="field"><input type="number" class="cWallH" value="300" min="10" step="1"/><span class="addon">cm</span></div>
+            </div>
+            <div>
+              <label>Ilość ścian</label>
+              <div class="field"><input type="number" class="cQty" value="1" min="1" step="1"/></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Parametry boni -->
+      <div class="section">
+        <div class="section-title">Parametry boni</div>
+        <div class="section-body expanded">
+
+          <div class="row row-3">
+            <div>
+              <label>Wysokość 1 boni</label>
+              <div class="field">
+                <input type="number" class="cBlockH" value="25" min="1" step="0.5" />
+                <span class="addon">cm</span>
+              </div>
+            </div>
+            <div>
+              <label>Szerokość 1 boni</label>
+              <div class="field">
+                <input type="number" class="cBlockW" value="30" min="1" step="0.5" />
+                <span class="addon">cm</span>
+              </div>
+            </div>
+            <div>
+              <label>Odległość od góry</label>
+              <div class="field">
+                <input type="number" class="cTop" value="20" min="0" step="0.5" />
+                <span class="addon">cm</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="row row-3">
+            <div>
+              <label>Odległość od dołu</label>
+              <div class="field">
+                <input type="number" class="cBottom" value="20" min="0" step="0.5" />
+                <span class="addon">cm</span>
+              </div>
+            </div>
+            <div>
+              <label>Odstęp pionowy</label>
+              <div class="field">
+                <input type="number" class="cGap" value="5" min="0" step="0.5" />
+                <span class="addon">cm</span>
+              </div>
+            </div>
+            <div>
+              <label>Cena 1 boni</label>
+              <div class="field">
+                <input type="number" class="cPrice" value="35" min="0" step="0.01" />
+                <span class="addon">zł</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="row row-3" style="align-items:end">
+            <label class="check" style="margin-bottom:0">
+              <input type="checkbox" class="cAlt" />
+              Bonie naprzemienne
+            </label>
+            <div class="altGroup hidden">
+              <label>Wysokość 2. boni</label>
+              <div class="field">
+                <input type="number" class="cBlockH2" value="15" min="1" step="0.5" />
+                <span class="addon">cm</span>
+              </div>
+            </div>
+            <div class="altGroup hidden">
+              <label>Szerokość 2. boni</label>
+              <div class="field">
+                <input type="number" class="cBlockW2" value="20" min="1" step="0.5" />
+                <span class="addon">cm</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="row row-3">
+            <div></div>
+            <div class="altGroup hidden">
+              <label>Cena 2. boni</label>
+              <div class="field">
+                <input type="number" class="cPrice2" value="35" min="0" step="0.01" />
+                <span class="addon">zł</span>
+              </div>
+            </div>
+            <div></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Podgląd -->
+      <div class="section">
+        <div class="section-title">Podgląd</div>
+        <div class="section-body expanded">
+          <div class="svg-wrap">
+            <svg viewBox="0 0 320 240" class="cPreview" aria-label="Podgląd narożnika" role="img"></svg>
+            <div class="legend">
+              <span><i class="bonie"></i> Bonie</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub" style="margin-top:8px" aria-live="polite">
+        Szt. boni na 1 ścianę: <strong class="cPieces">0</strong>
+        • Łącznie: <strong class="cPiecesTotal">0</strong>
+        • Koszt: <strong class="cCost">0,00 zł</strong>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- Modal planu cięć -->
+<div id="cutsModal" class="card" role="dialog" aria-modal="true" aria-labelledby="cutsTitle"
+     style="position:fixed;inset:10% 5% auto;max-height:80vh;overflow:auto;display:none;z-index:50">
+  <div class="head" id="cutsTitle">Plan cięć <button id="closeCuts" type="button" class="btn btn-danger btn-sm">Zamknij</button></div>
+  <div class="body">
+    <pre id="cutsContent" style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; white-space:pre-wrap"></pre>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div id="loadingOverlay" class="loading-overlay" style="display:none">
+  <div class="loading-content">
+    <div class="spinner"></div>
+    <p>Łączenie z API Selly.pl...</p>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="scripts/selly-api.js"></script>
+<script src="scripts/product-picker.js"></script>
+<script src="scripts/calculator.js"></script>
+<script src="scripts/app.js"></script>
+
+</body>
+</html>
