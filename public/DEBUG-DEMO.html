@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <title>TEST - Enhanced Product Picker</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <div style="padding: 20px; max-width: 800px; margin: 0 auto;">
+        <h1>🧪 TEST: Enhanced Product Picker</h1>
+        
+        <div style="background: #f0f9ff; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+            <h3>📋 Instrukcje testowania:</h3>
+            <ol>
+                <li><strong>Podpowiedzi</strong>: Wpisz "li" w pole listwy → powinny pojawić się podpowiedzi</li>
+                <li><strong>Wyszukiwanie</strong>: Wpisz "listwa" → pełne wyniki wyszukiwania</li>
+                <li><strong>Wybierz produkt</strong> → pojawi się przycisk "🔍 Podobne"</li>
+                <li><strong>Zaawansowane</strong>: Kliknij "Podobne" → modal z opcjami</li>
+            </ol>
+        </div>
+
+        <div class="card">
+            <div class="head">Test Product Pickers</div>
+            <div class="body">
+                
+                <!-- Test Listwy -->
+                <div style="margin-bottom: 20px;">
+                    <label>🔨 TEST: Picker dla listwy</label>
+                    <div class="field picker">
+                        <input type="text" class="pickListwa" placeholder="Wpisz 'li' dla podpowiedzi..." />
+                    </div>
+                    <div class="tiny" style="margin-top: 4px;">
+                        <span class="pill prodNameL" style="display: none;"></span>
+                    </div>
+                </div>
+
+                <!-- Test Gzymsy -->
+                <div style="margin-bottom: 20px;">
+                    <label>🏛️ TEST: Picker dla gzymsów</label>
+                    <div class="field picker">
+                        <input type="text" class="pickGd" placeholder="Wpisz 'gz' dla podpowiedzi..." />
+                    </div>
+                    <div class="tiny" style="margin-top: 4px;">
+                        <span class="pill prodNameGd" style="display: none;"></span>
+                    </div>
+                </div>
+
+                <!-- API Status -->
+                <div style="background: #f8fafc; padding: 12px; border-radius: 6px;">
+                    <div><strong>Status API:</strong> <span id="apiStatus">Loading...</span></div>
+                    <div style="margin-top: 8px;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setSellyCredentials()">🔑 Konfiguracja API</button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="testSellyAPI()">🧪 Test API</button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="testDemo()">🎭 Test Demo</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Console Output -->
+        <div class="card" style="margin-top: 20px;">
+            <div class="head">📝 Console Output</div>
+            <div class="body">
+                <pre id="consoleOutput" style="font-size: 11px; max-height: 200px; overflow-y: auto; background: #f8fafc; padding: 10px; border-radius: 4px;"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="scripts/selly-api.js"></script>
+    <script src="scripts/product-picker.js"></script>
+    <script src="scripts/calculator.js"></script>
+
+    <script>
+        // Enhanced logging dla debugowania
+        var originalLog = console.log;
+        var originalError = console.error;
+        var consoleOutput = document.getElementById('consoleOutput');
+        
+        function logToPage(type, args) {
+            var message = Array.prototype.slice.call(args).join(' ');
+            var timestamp = new Date().toLocaleTimeString();
+            var logLine = '[' + timestamp + '] ' + type.toUpperCase() + ': ' + message + '\n';
+            
+            if (consoleOutput) {
+                consoleOutput.textContent += logLine;
+                consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            }
+            
+            // Call original
+            if (type === 'log') originalLog.apply(console, args);
+            if (type === 'error') originalError.apply(console, args);
+        }
+        
+        console.log = function() { logToPage('log', arguments); };
+        console.error = function() { logToPage('error', arguments); };
+
+        // Initialize po załadowaniu
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Starting enhanced picker test...');
+            
+            // Update API status
+            function updateStatus() {
+                var status = window.getSellyStatus ? window.getSellyStatus() : { mode: 'demo', connected: false };
+                var statusEl = document.getElementById('apiStatus');
+                if (statusEl) {
+                    statusEl.textContent = status.mode + ' - ' + (status.connected ? 'connected' : 'disconnected') + 
+                                         (status.shop ? ' (' + status.shop + ')' : '');
+                }
+            }
+            
+            updateStatus();
+            setInterval(updateStatus, 5000);
+            
+            // Initialize product pickers
+            setTimeout(function() {
+                console.log('🔍 Initializing test pickers...');
+                
+                if (typeof ProductPicker !== 'undefined') {
+                    // Listwa picker
+                    var listwaInput = document.querySelector('.pickListwa');
+                    if (listwaInput) {
+                        new ProductPicker(listwaInput, {
+                            type: 'listwa',
+                            onSelect: function(product) {
+                                console.log('📏 Listwa selected:', product.name, product.pricePLN + 'zł');
+                                var pill = document.querySelector('.prodNameL');
+                                if (pill) {
+                                    pill.textContent = product.name;
+                                    pill.style.display = 'inline-block';
+                                }
+                            },
+                            onError: function(error) {
+                                console.error('❌ Listwa picker error:', error);
+                            }
+                        });
+                        console.log('✅ Listwa picker initialized');
+                    }
+                    
+                    // Gzyms picker
+                    var gzymsInput = document.querySelector('.pickGd');
+                    if (gzymsInput) {
+                        new ProductPicker(gzymsInput, {
+                            type: 'gzyms',
+                            onSelect: function(product) {
+                                console.log('📐 Gzyms selected:', product.name, product.pricePLN + 'zł');
+                                var pill = document.querySelector('.prodNameGd');
+                                if (pill) {
+                                    pill.textContent = product.name;
+                                    pill.style.display = 'inline-block';
+                                }
+                            },
+                            onError: function(error) {
+                                console.error('❌ Gzyms picker error:', error);
+                            }
+                        });
+                        console.log('✅ Gzyms picker initialized');
+                    }
+                } else {
+                    console.error('❌ ProductPicker not available');
+                }
+            }, 1000);
+        });
+
+        // Test demo functionality
+        window.testDemo = function() {
+            console.log('🎭 Testing demo functionality...');
+            
+            if (window.SellyAPI) {
+                Promise.all([
+                    window.SellyAPI.searchProducts('listwa', 'listwa', 5),
+                    window.SellyAPI.searchProducts('gzyms', 'gzyms', 5)
+                ]).then(function(results) {
+                    var listwy = results[0] || [];
+                    var gzymsy = results[1] || [];
+                    
+                    console.log('✅ Demo test results:');
+                    console.log('📏 Listwy found:', listwy.length);
+                    console.log('📐 Gzymsy found:', gzymsy.length);
+                    
+                    if (listwy.length > 0) {
+                        console.log('📦 First listwa:', listwy[0].name, listwy[0].pricePLN + 'zł');
+                    }
+                    
+                    alert('🎭 DEMO TEST COMPLETE\n\n' +
+                          'Listwy: ' + listwy.length + ' produktów\n' +
+                          'Gzymsy: ' + gzymsy.length + ' produktów\n\n' +
+                          'Sprawdź console dla szczegółów');
+                }).catch(function(error) {
+                    console.error('❌ Demo test failed:', error);
+                    alert('❌ Demo test failed: ' + error.message);
+                });
+            } else {
+                alert('❌ SellyAPI not available');
+            }
+        };
+    </script>
+</body>
+</html>
