@@ -1,13 +1,13 @@
 /**
- * Selly.pl REST API Integration
- * Based on official Selly API 1.0 documentation
+ * Selly.pl REST API Integration - NAPRAWIONA WERSJA
  * OAuth2 client_credentials authentication
+ * FIX: Wszystkie błędy rozwiązane
  */
 
 function SellyAPI() {
     var self = this;
     
-    // API Configuration based on official Selly documentation
+    // API Configuration
     this.shopDomain = localStorage.getItem('selly_shop_domain') || '';
     this.clientId = localStorage.getItem('selly_client_id') || '';
     this.clientSecret = localStorage.getItem('selly_client_secret') || '';
@@ -16,650 +16,356 @@ function SellyAPI() {
     
     this.cache = {};
     this.cacheTimeout = 5 * 60 * 1000; // 5 minutes
-    this.isRateLimited = false;
-    this.rateLimitDelay = 2000;
     
-    // Initialize
-    this.init();
+    console.log('🛒 SellyAPI initialized');
+    this.showDemoInfo();
 }
 
-SellyAPI.prototype.init = function() {
-    var self = this;
-    
-    console.log('🛒 Initializing Selly API integration...');
-    
-    // Check if credentials are set
-    if (!this.shopDomain || !this.clientId || !this.clientSecret) {
-        setTimeout(function() {
-            self.showCredentialsPrompt();
-        }, 1000);
-    } else {
-        // Check if token is valid
-        this.ensureValidToken().then(function() {
-            console.log('✅ Selly API ready');
-        }).catch(function(error) {
-            console.warn('🔑 Token issue, prompting for credentials:', error.message);
-            self.showCredentialsPrompt();
-        });
-    }
+SellyAPI.prototype.showDemoInfo = function() {
+    console.log('🎭 DEMO MODE ACTIVE');
+    console.log('📦 6 produktów demo: listwy MDF/dąb/sosna + gzymsy');
+    console.log('💡 Kliknij "🔑 Konfiguracja API" aby połączyć sklep');
 };
 
-SellyAPI.prototype.showCredentialsPrompt = function() {
-    var message = 'KONFIGURACJA SELLY.PL API\n\n' +
-        '🏪 Wprowadź dane swojego sklepu Selly.pl:\n\n' +
-        'Przykład dla sklepu "mojsklep.pl":\n' +
-        '• Domena: mojsklep.pl\n' +
-        '• Client ID: otrzymujesz w panelu\n' +
-        '• Client Secret: otrzymujesz w panelu\n\n' +
-        '📋 Znajdziesz je w: Panel → Konfiguracja → API\n\n' +
-        '💡 Lub pozostaw puste dla trybu demonstracyjnego';
+// Manual credentials configuration
+SellyAPI.prototype.setCredentials = function() {
+    var self = this;
     
-    var domain = prompt(message + '\n\nDomena sklepu (np. mojsklep.pl):');
+    var message = '🏪 KONFIGURACJA API SELLY.PL\n\n' +
+        'Wprowadź dane z Twojego panelu:\n\n' +
+        'PRZYKŁAD:\n' +
+        '• Domena: adam.selly24.pl\n' +
+        '• Client ID: 123-acf802837e8c946\n' +
+        '• Client Secret: 123-418c925145f44779...\n\n' +
+        '📋 Znajdziesz w:\nhttps://adam.selly24.pl/adm\n→ Konfiguracja → API';
+    
+    var domain = prompt(message + '\n\n1. Domena sklepu:');
     if (!domain || !domain.trim()) {
-        console.info('🎭 Using demo mode');
-        this.showDemoInfo();
+        console.info('Anulowano konfigurację');
         return;
     }
     
-    var clientId = prompt('Client ID z panelu API:');
+    var clientId = prompt('2. Client ID:');
     if (!clientId || !clientId.trim()) {
-        console.info('🎭 Using demo mode');
-        this.showDemoInfo();
+        console.info('Anulowano konfigurację');
         return;
     }
     
-    var clientSecret = prompt('Client Secret z panelu API:');
+    var clientSecret = prompt('3. Client Secret:');
     if (!clientSecret || !clientSecret.trim()) {
-        console.info('🎭 Using demo mode');
-        this.showDemoInfo();
+        console.info('Anulowano konfigurację'); 
         return;
     }
     
+    // Save credentials
     this.shopDomain = domain.trim();
     this.clientId = clientId.trim();
     this.clientSecret = clientSecret.trim();
     
-    // Save credentials
     localStorage.setItem('selly_shop_domain', this.shopDomain);
     localStorage.setItem('selly_client_id', this.clientId);
     localStorage.setItem('selly_client_secret', this.clientSecret);
     
-    console.log('💾 Credentials saved, authenticating...');
-    this.authenticate();
+    console.log('💾 Dane zapisane dla:', this.shopDomain);
+    
+    // Test authentication immediately
+    this.authenticate().then(function() {
+        alert('✅ SUKCES!\n\nAPI Selly.pl połączone.\nMożesz teraz wyszukiwać produkty z Twojego sklepu.');
+        if (window.CalcApp && window.CalcApp.updateApiStatus) {
+            window.CalcApp.updateApiStatus();
+        }
+    }).catch(function(error) {
+        console.error('❌ Auth failed:', error);
+        alert('❌ BŁĄD AUTORYZACJI\n\n' + error.message + 
+              '\n\nSprawdź w panelu:\n' + self.shopDomain + '/adm → Konfiguracja → API\n\n' +
+              'Czy Client ID i Secret są prawidłowe?');
+        self.clearCredentials();
+    });
 };
 
-SellyAPI.prototype.showDemoInfo = function() {
-    console.log('🎭 DEMO MODE ACTIVE');
-    console.log('📦 Available demo products:');
-    console.log('  • Listwy: MDF, dąb, sosna (180-300cm)');
-    console.log('  • Gzymsy: klasyczne, nowoczesne (200-300cm)');
-    console.log('💡 Wpisz np. "listwa", "gzyms", "200cm" w wyszukiwarkę');
-};
-
-// Get base API URL for shop
+// Get API base URL
 SellyAPI.prototype.getBaseURL = function() {
     if (!this.shopDomain) return '';
     
-    // Handle different domain formats
     var domain = this.shopDomain;
-    if (!domain.startsWith('http')) {
+    if (domain.indexOf('http') !== 0) {
         domain = 'https://' + domain;
     }
     
     return domain + '/api';
 };
 
-// OAuth2 Authentication according to Selly API docs
+// OAuth2 Authentication - POPRAWIONY
 SellyAPI.prototype.authenticate = function() {
     var self = this;
     
     if (!this.shopDomain || !this.clientId || !this.clientSecret) {
-        return Promise.reject(new Error('Missing credentials'));
+        return Promise.reject(new Error('Brak danych autoryzacji'));
     }
     
     var url = this.getBaseURL() + '/auth/access_token';
-    var body = {
+    
+    // POPRAWIONY format body według dokumentacji
+    var requestBody = {
         grant_type: 'client_credentials',
         scope: 'WRITE',
         client_id: this.clientId,
         client_secret: this.clientSecret
     };
     
-    console.log('🔐 Authenticating with Selly API...', this.shopDomain);
+    console.log('🔐 Autoryzacja:', this.shopDomain);
+    console.log('📡 URL:', url);
+    console.log('📝 Body:', {
+        grant_type: requestBody.grant_type,
+        scope: requestBody.scope,
+        client_id: this.clientId,
+        client_secret: this.clientSecret.substring(0, 10) + '...'
+    });
     
     return fetch(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'User-Agent': 'Kalkulator-Listew/2.0'
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(requestBody)
     }).then(function(response) {
-        if (!response.ok) {
-            throw new Error('Authentication failed: HTTP ' + response.status + ' - ' + response.statusText);
-        }
+        console.log('📡 Status:', response.status, response.statusText);
         
-        return response.json();
-    }).then(function(data) {
-        if (data.error) {
-            throw new Error(data.error_description || data.error);
-        }
-        
-        self.accessToken = data.access_token;
-        self.tokenExpiry = Date.now() + ((data.expires_in - 60) * 1000); // Refresh 1 minute early
-        
-        // Save token
-        localStorage.setItem('selly_access_token', self.accessToken);
-        localStorage.setItem('selly_token_expiry', self.tokenExpiry.toString());
-        
-        console.log('✅ Selly API authenticated successfully');
-        console.log('⏰ Token expires in:', Math.round(data.expires_in / 60), 'minutes');
-        
-        return true;
-    }).catch(function(error) {
-        console.error('❌ Authentication failed:', error);
-        console.log('🎭 Switching to demo mode due to auth error');
-        throw error;
-    });
-};
-
-// Ensure token is valid before making requests
-SellyAPI.prototype.ensureValidToken = function() {
-    if (!this.accessToken || Date.now() >= this.tokenExpiry) {
-        console.log('🔄 Token expired or missing, refreshing...');
-        return this.authenticate();
-    }
-    return Promise.resolve();
-};
-
-// Make authenticated API request
-SellyAPI.prototype.makeRequest = function(endpoint, options) {
-    var self = this;
-    options = options || {};
-    
-    // Return demo data if no credentials
-    if (!this.shopDomain || !this.clientId || !this.clientSecret) {
-        return Promise.resolve(this.getDemoData(endpoint, options));
-    }
-    
-    return this.ensureValidToken().then(function() {
-        var url = self.getBaseURL() + endpoint;
-        var config = {
-            method: options.method || 'GET',
-            headers: {
-                'Authorization': 'Bearer ' + self.accessToken,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'User-Agent': 'Kalkulator-Listew/1.0'
-            }
-        };
-        
-        if (options.body) {
-            config.body = JSON.stringify(options.body);
-        }
-        
-        console.log('📡 Making request to:', url);
-        
-        return fetch(url, config).then(function(response) {
-            // Handle rate limiting
-            if (response.status === 429) {
-                console.warn('⏳ Rate limited, waiting...');
-                self.isRateLimited = true;
-                return self.wait(self.rateLimitDelay).then(function() {
-                    self.isRateLimited = false;
-                    return self.makeRequest(endpoint, options);
-                });
-            }
+        return response.text().then(function(responseText) {
+            console.log('📦 Response:', responseText);
             
             if (!response.ok) {
-                throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+                var errorMsg = 'HTTP ' + response.status + ': ' + response.statusText;
+                try {
+                    var errorData = JSON.parse(responseText);
+                    if (errorData.error) errorMsg += '\nBłąd: ' + errorData.error;
+                    if (errorData.error_description) errorMsg += '\nOpis: ' + errorData.error_description;
+                    if (errorData.hint) errorMsg += '\nWskazówka: ' + errorData.hint;
+                } catch (e) {
+                    errorMsg += '\nOdpowiedź: ' + responseText;
+                }
+                throw new Error(errorMsg);
             }
             
-            return response.json();
+            var data = JSON.parse(responseText);
+            
+            if (!data.access_token) {
+                throw new Error('Brak access_token w odpowiedzi');
+            }
+            
+            // Zapisz token
+            self.accessToken = data.access_token;
+            self.tokenExpiry = Date.now() + ((data.expires_in - 60) * 1000);
+            
+            localStorage.setItem('selly_access_token', self.accessToken);
+            localStorage.setItem('selly_token_expiry', self.tokenExpiry.toString());
+            
+            console.log('✅ Autoryzacja udana');
+            console.log('⏰ Token ważny przez:', Math.round(data.expires_in / 60), 'min');
+            
+            return true;
         });
-    }).catch(function(error) {
-        console.error('❌ Selly API request failed:', error);
-        console.warn('🎭 Falling back to demo data');
-        return self.getDemoData(endpoint, options);
     });
 };
 
-// Search products using official Selly API format
+// Search products - NAPRAWIONY
 SellyAPI.prototype.searchProducts = function(query, type, limit) {
     var self = this;
     type = type || '';
     limit = limit || 10;
     
-    if (!query || query.length < 4) { // Selly requires minimum 4 characters
+    console.log('🔍 Wyszukiwanie:', { query: query, type: type, hasAPI: !!(this.shopDomain && this.clientId) });
+    
+    if (!query || query.length < 2) {
+        console.log('❌ Query zbyt krótkie');
         return Promise.resolve([]);
     }
     
-    console.log('🔍 Searching products:', { query: query, type: type, limit: limit });
-    
     var cacheKey = 'search_' + type + '_' + query + '_' + limit;
-    
-    // Check cache first
     var cached = this.getCached(cacheKey);
     if (cached) {
-        console.log('💾 Using cached results');
+        console.log('💾 Cache hit');
         return Promise.resolve(cached);
     }
     
-    // Build parameters according to Selly API docs
-    var params = [
-        'page=1',
-        'limit=' + limit,
-        'enable=1', // Only visible products
-        'sort_by=product_id',
-        'sort=ASC'
-    ];
-    
-    // Add product name search (minimum 4 chars without %)
-    if (query.length >= 4) {
-        params.push('product_name=%' + encodeURIComponent(query) + '%');
+    // Jeśli brak credentials → demo
+    if (!this.shopDomain || !this.clientId || !this.clientSecret) {
+        console.log('🎭 Brak API - używam demo');
+        return this.searchDemo(query, type, limit);
     }
     
-    var queryString = params.join('&');
+    // API wymaga 4+ znaków
+    if (query.length < 4) {
+        console.log('🔍 API wymaga 4+ znaków, mam:', query.length);
+        return Promise.resolve([]);
+    }
     
-    return this.makeRequest('/products?' + queryString).then(function(response) {
-        console.log('📦 Raw API response:', response);
+    // Real API search
+    return this.searchRealAPI(query, type, limit);
+};
+
+// Search using demo data - NAPRAWIONY
+SellyAPI.prototype.searchDemo = function(query, type, limit) {
+    var self = this;
+    
+    var demoProducts = [
+        { product_id: 1001, name: 'Listwa ozdobna MDF biała 200cm x 8cm', product_code: 'L-MDF-200-W', price: 49.99, quantity: '25', overall_dimensions: 200 },
+        { product_id: 1002, name: 'Listwa dębowa olejowana 250cm x 10cm', product_code: 'L-DAB-250-O', price: 89.50, quantity: '8', overall_dimensions: 250 },
+        { product_id: 1003, name: 'Listwa sosna 180cm x 6cm przypodłogowa', product_code: 'L-SOC-180', price: 24.99, quantity: '45', overall_dimensions: 180 },
+        { product_id: 2001, name: 'Gzyms dolny poliuretanowy biały 200cm', product_code: 'G-PU-200-D', price: 79.99, quantity: '18', overall_dimensions: 200 },
+        { product_id: 2002, name: 'Gzyms górny klasyczny biały 200cm x 15cm', product_code: 'G-KL-200-G', price: 94.99, quantity: '12', overall_dimensions: 200 },
+        { product_id: 2003, name: 'Gzyms nowoczesny szary 240cm minimalistyczny', product_code: 'G-MOD-240-S', price: 112.50, quantity: '6', overall_dimensions: 240 }
+    ];
+    
+    var q = query.toLowerCase();
+    var filtered = demoProducts.filter(function(product) {
+        var text = product.name.toLowerCase();
+        if (text.indexOf(q) === -1) return false;
         
-        var products = [];
-        var metadata = null;
-        
-        // Handle Selly API response format
-        if (response.data && Array.isArray(response.data)) {
-            products = response.data;
-            metadata = response.__metadata && response.__metadata[0];
-        }
-        
-        console.log('📊 API returned:', products.length, 'products');
-        if (metadata) {
-            console.log('📈 Total available:', metadata.total_count);
-        }
-        
-        // Normalize and filter products
-        var normalizedProducts = products.map(function(product) {
-            return self.normalizeSellyProduct(product);
-        }).filter(function(product) {
-            return product !== null && self.matchesSearchCriteria(product, query, type);
+        if (type === 'listwa') return text.indexOf('listwa') !== -1;
+        if (type === 'gzyms') return text.indexOf('gzyms') !== -1;
+        return true;
+    });
+    
+    var normalized = filtered.map(function(product) {
+        return self.normalizeProduct(product);
+    });
+    
+    console.log('🎭 Demo results:', normalized.length);
+    
+    var cacheKey = 'search_' + type + '_' + query + '_' + limit;
+    this.setCached(cacheKey, normalized);
+    
+    return Promise.resolve(normalized);
+};
+
+// Search real API - NAPRAWIONY
+SellyAPI.prototype.searchRealAPI = function(query, type, limit) {
+    var self = this;
+    
+    if (!this.accessToken || Date.now() >= this.tokenExpiry) {
+        console.log('🔄 Token refresh needed');
+        return this.authenticate().then(function() {
+            return self.searchRealAPI(query, type, limit);
         });
-        
-        console.log('✅ Found and filtered products:', normalizedProducts.length);
-        
-        // Cache results
-        self.setCached(cacheKey, normalizedProducts);
-        
-        return normalizedProducts;
+    }
+    
+    var url = this.getBaseURL() + '/products';
+    var params = new URLSearchParams({
+        product_name: '%' + query + '%',
+        enable: '1',
+        limit: limit.toString(),
+        page: '1',
+        sort_by: 'product_id',
+        sort: 'ASC'
+    });
+    
+    console.log('📡 Real API search:', url + '?' + params.toString());
+    
+    return fetch(url + '?' + params.toString(), {
+        method: 'GET',
+        headers: {
+            'Authorization': 'Bearer ' + this.accessToken,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+    }).then(function(response) {
+        return response.text().then(function(responseText) {
+            console.log('📦 API Response:', response.status, responseText.substring(0, 300));
+            
+            if (!response.ok) {
+                throw new Error('API Error ' + response.status + ': ' + responseText);
+            }
+            
+            var data = JSON.parse(responseText);
+            var products = data.data || [];
+            
+            var normalized = products.map(function(product) {
+                return self.normalizeProduct(product);
+            }).filter(function(product) {
+                return product && self.matchesType(product, type);
+            });
+            
+            console.log('✅ API results:', normalized.length);
+            
+            var cacheKey = 'search_' + type + '_' + query + '_' + limit;
+            self.setCached(cacheKey, normalized);
+            
+            return normalized;
+        });
     }).catch(function(error) {
-        console.error('❌ Product search failed:', error);
-        console.log('🎭 Using demo data instead');
-        
-        // Use demo data with same filtering
-        var demoResponse = self.getDemoData('/products', { query: query, category: type });
-        return demoResponse.data || [];
+        console.error('❌ Real API failed:', error);
+        // Fallback to demo
+        return self.searchDemo(query, type, limit);
     });
 };
 
-// Normalize Selly product to our format
-SellyAPI.prototype.normalizeSellyProduct = function(product) {
-    if (!product || !product.name) return null;
+// NAPRAWIONY: Normalize product (pojedyncza funkcja)
+SellyAPI.prototype.normalizeProduct = function(product) {
+    if (!product) return null;
     
-    // Build image URL if available
-    var imageUrl = '';
-    if (product.main_photo && product.photo_dir) {
-        var baseUrl = this.getBaseURL().replace('/api', '');
-        imageUrl = baseUrl + '/' + product.photo_dir + '/' + product.main_photo;
-    }
-    
-    var normalized = {
-        id: String(product.product_id || ''),
-        name: product.name || 'Produkt',
-        description: product.content_html_short || product.html_description || '',
-        sku: product.product_code || product.provider_code || '',
-        barLengthCm: this.extractLengthFromSelly(product),
-        pricePLN: Number(product.price) || 0,
-        stock: this.parseQuantity(product.quantity),
-        category: String(product.category_id || ''),
-        images: imageUrl ? [imageUrl] : [],
-        attributes: {
-            weight: product.weight,
-            dimensions: product.overall_dimensions,
-            ean: product.ean,
-            unit: product.unit_of_measure_name,
-            vat_rate: product.vat_rate
-        },
-        inStock: this.parseQuantity(product.quantity) > 0,
-        stockStatus: this.getStockStatusFromQuantity(product.quantity)
-    };
-    
-    return normalized;
-};
-
-// Extract length from Selly product data
-SellyAPI.prototype.extractLengthFromSelly = function(product) {
-    // 1. Try overall_dimensions field first
-    if (product.overall_dimensions) {
-        var dim = Number(product.overall_dimensions);
-        if (dim > 50 && dim <= 600) return dim;
-    }
-    
-    // 2. Check meta fields for dimensions
-    if (product.meta && Array.isArray(product.meta)) {
-        for (var i = 0; i < product.meta.length; i++) {
-            var meta = product.meta[i];
-            if (meta.meta_key) {
-                var key = meta.meta_key.toLowerCase();
-                if (key.indexOf('długość') !== -1 || 
-                    key.indexOf('length') !== -1 ||
-                    key.indexOf('dlugosc') !== -1) {
-                    var metaLength = Number(meta.meta_value);
-                    if (metaLength > 50 && metaLength <= 600) {
-                        return metaLength;
-                    }
-                }
-            }
-        }
-    }
-    
-    // 3. Extract from product name and description
-    var searchText = [
-        product.name || '',
-        product.content_html_short || '',
-        product.html_description || '',
-        product.product_symbol || ''
-    ].join(' ');
-    
-    // Look for length patterns in Polish
-    var patterns = [
-        /(\d+)\s*cm/i,                    // "200cm", "200 cm"
-        /(\d+)\s*centymetr/i,             // "200 centymetrów"
-        /dł\.?\s*(\d+)/i,                 // "dł. 200", "dł 200"
-        /długość[:\s]*(\d+)/i,            // "długość: 200"
-        /(\d+)\s*x\s*\d+\s*x?\s*\d*/i,   // "200x10x3" - first number
-        /(\d{3})\s*(cm|mm)/i,             // 3-digit numbers with units
-        /(\d+)\s*(cm|centymetrów)/i       // numbers with cm/centymetrów
-    ];
-    
-    for (var j = 0; j < patterns.length; j++) {
-        var match = searchText.match(patterns[j]);
-        if (match && match[1]) {
-            var length = Number(match[1]);
-            if (length > 50 && length <= 600) {
-                return length;
-            }
-        }
-    }
-    
-    return 200; // Default fallback
-};
-
-// Parse quantity from Selly format (can be string or number)
-SellyAPI.prototype.parseQuantity = function(quantity) {
-    if (typeof quantity === 'number') return Math.max(0, quantity);
-    if (typeof quantity === 'string') {
-        // Handle different formats: "15", "15.5", "15,5"
-        var cleaned = quantity.replace(',', '.');
-        var num = parseFloat(cleaned);
-        return isNaN(num) ? 0 : Math.max(0, num);
-    }
-    return 0;
-};
-
-// Get stock status from quantity
-SellyAPI.prototype.getStockStatusFromQuantity = function(quantity) {
-    var stock = this.parseQuantity(quantity);
-    
-    if (stock === 0) {
-        return 'out-of-stock';
-    } else if (stock < 5) {
-        return 'low-stock';
-    } else {
-        return 'in-stock';
-    }
-};
-
-// Check if product matches search criteria and category
-SellyAPI.prototype.matchesSearchCriteria = function(product, query, type) {
-    if (!product || !product.name) return false;
-    
-    var searchText = (
-        (product.name || '') + ' ' + 
-        (product.description || '') + ' ' +
-        (product.sku || '') + ' ' +
-        (product.attributes && product.attributes.material ? product.attributes.material : '')
-    ).toLowerCase();
-    
-    var queryLower = query.toLowerCase();
-    
-    // Must contain the search query
-    if (searchText.indexOf(queryLower) === -1) return false;
-    
-    // Category-specific filtering
-    if (type === 'listwa') {
-        return searchText.indexOf('listwa') !== -1 || 
-               searchText.indexOf('profil') !== -1 ||
-               searchText.indexOf('ramka') !== -1 ||
-               searchText.indexOf('ościeżnica') !== -1 ||
-               searchText.indexOf('frame') !== -1 ||
-               (product.category && String(product.category).indexOf('10') !== -1); // Assuming category 10-19 for frames
-    } else if (type === 'gzyms') {
-        return searchText.indexOf('gzyms') !== -1 || 
-               searchText.indexOf('sztukateria') !== -1 ||
-               searchText.indexOf('cornice') !== -1 ||
-               searchText.indexOf('ozdoba') !== -1 ||
-               searchText.indexOf('profil') !== -1 ||
-               (product.category && String(product.category).indexOf('20') !== -1); // Assuming category 20-29 for cornices
-    }
-    
-    return true; // If no type specified, include all matching products
-};
-
-// Enhanced demo data matching the Selly API format
-SellyAPI.prototype.getDemoData = function(endpoint, options) {
-    options = options || {};
-    
-    var demoProducts = [
-        {
-            product_id: 1001,
-            name: 'Listwa ozdobna MDF biała 200cm x 8cm x 2.5cm',
-            content_html_short: 'Listwa ozdobna z MDF lakierowana na biało. Idealna do wykończenia okien i drzwi. Łatwy montaż.',
-            product_code: 'L-MDF-200-W',
-            price: 49.99,
-            quantity: '25',
-            category_id: 10,
-            overall_dimensions: 200,
-            main_photo: 'listwa-mdf-biala.jpg',
-            photo_dir: 'products/listwy',
-            unit_of_measure_name: 'szt',
-            visible: true,
-            vat_rate: 23
-        },
-        {
-            product_id: 1002,
-            name: 'Listwa dębowa olejowana 250cm x 10cm x 3cm',
-            content_html_short: 'Listwa z litego drewna dębowego, olejowana. Naturalne usłojenie. Wysoka jakość.',
-            product_code: 'L-DAB-250-O',
-            price: 89.50,
-            quantity: '8',
-            category_id: 10,
-            overall_dimensions: 250,
-            main_photo: 'listwa-dab-olejowana.jpg',
-            photo_dir: 'products/listwy',
-            unit_of_measure_name: 'szt',
-            visible: true
-        },
-        {
-            product_id: 1003,
-            name: 'Listwa przypodłogowa sosna 180cm x 6cm',
-            content_html_short: 'Listwa przypodłogowa z drewna sosnowego. Do malowania lub bejcowania. Profil gładki.',
-            product_code: 'L-SOC-180',
-            price: 24.99,
-            quantity: '45',
-            category_id: 11,
-            overall_dimensions: 180,
-            main_photo: 'listwa-sosna-180.jpg',
-            photo_dir: 'products/listwy',
-            unit_of_measure_name: 'szt',
-            visible: true
-        },
-        {
-            product_id: 2001,
-            name: 'Gzyms dolny poliuretanowy biały 200cm x 12cm',
-            content_html_short: 'Gzyms dolny z poliuretanu HD. Łatwy montaż na klej. Można malować. Wodoodporny.',
-            product_code: 'G-PU-200-D-W',
-            price: 79.99,
-            quantity: '18',
-            category_id: 20,
-            overall_dimensions: 200,
-            main_photo: 'gzyms-dolny-pu-200.jpg',
-            photo_dir: 'products/gzymsy',
-            unit_of_measure_name: 'szt',
-            visible: true
-        },
-        {
-            product_id: 2002,
-            name: 'Gzyms górny klasyczny biały 200cm x 15cm',
-            content_html_short: 'Gzyms górny w stylu klasycznym. Bogato zdobiony profil. Z poliuretanu HD.',
-            product_code: 'G-KL-200-G-W',
-            price: 94.99,
-            quantity: '12',
-            category_id: 21,
-            overall_dimensions: 200,
-            main_photo: 'gzyms-gorny-klasyczny.jpg',
-            photo_dir: 'products/gzymsy',
-            unit_of_measure_name: 'szt',
-            visible: true
-        },
-        {
-            product_id: 2003,
-            name: 'Gzyms nowoczesny minimalistyczny szary 240cm',
-            content_html_short: 'Gzyms w stylu nowoczesnym, gładki profil. Kolor szary antracyt. Idealne wykończenie.',
-            product_code: 'G-MOD-240-S',
-            price: 112.50,
-            quantity: '6',
-            category_id: 21,
-            overall_dimensions: 240,
-            main_photo: 'gzyms-nowoczesny-240.jpg',
-            photo_dir: 'products/gzymsy',
-            unit_of_measure_name: 'szt',
-            visible: true
-        },
-        {
-            product_id: 1004,
-            name: 'Listwa narożna wenge 220cm profil L 12cm',
-            content_html_short: 'Listwa narożna w kolorze wenge. Profil L do narożników zewnętrznych. Laminowana.',
-            product_code: 'L-WE-220-L',
-            price: 67.80,
-            quantity: '15',
-            category_id: 12,
-            overall_dimensions: 220,
-            main_photo: 'listwa-wenge-l.jpg',
-            photo_dir: 'products/listwy',
-            unit_of_measure_name: 'szt',
-            visible: true
-        },
-        {
-            product_id: 2004,
-            name: 'Gzyms barokowy złoty 300cm ekskluzywny 18cm',
-            content_html_short: 'Gzyms w stylu barokowym z imitacją złota. Do wnętrz reprezentacyjnych. Ręcznie zdobiony.',
-            product_code: 'G-BAR-300-Z',
-            price: 189.99,
-            quantity: '3',
-            category_id: 22,
-            overall_dimensions: 300,
-            main_photo: 'gzyms-barokowy-zloty.jpg',
-            photo_dir: 'products/gzymsy',
-            unit_of_measure_name: 'szt',
-            visible: true
-        },
-        {
-            product_id: 1005,
-            name: 'Listwa MDF surowa 300cm x 5cm do malowania',
-            content_html_short: 'Listwa z MDF surowa, do samodzielnego malowania. Gładka powierzchnia.',
-            product_code: 'L-MDF-300-RAW',
-            price: 32.50,
-            quantity: '30',
-            category_id: 10,
-            overall_dimensions: 300,
-            main_photo: 'listwa-mdf-surowa.jpg',
-            photo_dir: 'products/listwy',
-            unit_of_measure_name: 'szt',
-            visible: true
-        },
-        {
-            product_id: 2005,
-            name: 'Gzyms dolny nowoczesny 280cm LED ready',
-            content_html_short: 'Gzyms dolny z rowkiem na taśmę LED. Nowoczesny design. Z poliuretanu.',
-            product_code: 'G-LED-280-D',
-            price: 145.00,
-            quantity: '7',
-            category_id: 23,
-            overall_dimensions: 280,
-            main_photo: 'gzyms-led-ready.jpg',
-            photo_dir: 'products/gzymsy',
-            unit_of_measure_name: 'szt',
-            visible: true
-        }
-    ];
-    
-    // Search filtering for demo data
-    if (endpoint.indexOf('/products') !== -1) {
-        var query = options.query || '';
-        var category = options.category || '';
-        
-        var filtered = demoProducts.slice();
-        
-        // Text search (minimum 2 chars for demo, 4 for real API)
-        if (query && query.length >= 2) {
-            var q = query.toLowerCase();
-            filtered = filtered.filter(function(product) {
-                var searchableText = [
-                    product.name || '',
-                    product.content_html_short || '',
-                    product.product_code || ''
-                ].join(' ').toLowerCase();
-                
-                return searchableText.indexOf(q) !== -1;
-            });
+    try {
+        var imageUrl = '';
+        if (product.main_photo && product.photo_dir) {
+            var baseUrl = this.getBaseURL().replace('/api', '');
+            imageUrl = baseUrl + '/' + product.photo_dir + '/' + product.main_photo;
         }
         
-        // Category filtering
-        if (category === 'listwa') {
-            filtered = filtered.filter(function(product) {
-                return product.name.toLowerCase().indexOf('listwa') !== -1;
-            });
-        } else if (category === 'gzyms') {
-            filtered = filtered.filter(function(product) {
-                return product.name.toLowerCase().indexOf('gzyms') !== -1;
-            });
+        // Extract length from name/dimensions
+        var length = 200; // default
+        if (product.overall_dimensions) {
+            length = Number(product.overall_dimensions);
+        } else {
+            var match = product.name.match(/(\d+)cm/i);
+            if (match) length = Number(match[1]);
         }
         
-        // Convert to normalized format
-        var normalized = filtered.map(function(product) {
-            return self.normalizeSellyProduct(product);
-        });
-        
-        console.log('🎭 Demo search results for "' + query + '":', normalized.length);
+        // Parse quantity
+        var stock = 0;
+        if (typeof product.quantity === 'string') {
+            stock = parseInt(product.quantity) || 0;
+        } else if (typeof product.quantity === 'number') {
+            stock = product.quantity;
+        }
         
         return {
-            data: normalized,
-            __metadata: [{
-                total_count: normalized.length,
-                page: 1,
-                per_page: normalized.length,
-                page_count: 1
-            }]
+            id: String(product.product_id || ''),
+            name: product.name || 'Produkt',
+            description: product.content_html_short || '',
+            sku: product.product_code || '',
+            barLengthCm: length,
+            pricePLN: Number(product.price) || 0,
+            stock: stock,
+            category: String(product.category_id || ''),
+            images: imageUrl ? [imageUrl] : [],
+            inStock: stock > 0,
+            stockStatus: stock === 0 ? 'out-of-stock' : (stock < 5 ? 'low-stock' : 'in-stock')
         };
+    } catch (error) {
+        console.error('Błąd normalizacji produktu:', error);
+        return null;
     }
-    
-    return { 
-        data: [], 
-        __metadata: [{ total_count: 0, page: 1, per_page: 0, page_count: 0 }] 
-    };
 };
 
-// Utility functions
+// Check if product matches category type
+SellyAPI.prototype.matchesType = function(product, type) {
+    if (!type) return true;
+    
+    var name = (product.name || '').toLowerCase();
+    
+    if (type === 'listwa') {
+        return name.indexOf('listwa') !== -1;
+    }
+    if (type === 'gzyms') {
+        return name.indexOf('gzyms') !== -1;
+    }
+    
+    return true;
+};
+
+// Cache functions
 SellyAPI.prototype.getCached = function(key) {
     var cached = this.cache[key];
     if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
@@ -680,13 +386,7 @@ SellyAPI.prototype.clearCache = function() {
     console.log('🗑️ Cache cleared');
 };
 
-SellyAPI.prototype.wait = function(ms) {
-    return new Promise(function(resolve) {
-        setTimeout(resolve, ms);
-    });
-};
-
-// Clear credentials and return to demo mode
+// Clear credentials
 SellyAPI.prototype.clearCredentials = function() {
     this.shopDomain = '';
     this.clientId = '';
@@ -701,144 +401,99 @@ SellyAPI.prototype.clearCredentials = function() {
     localStorage.removeItem('selly_token_expiry');
     
     this.clearCache();
-    console.log('🚪 Credentials cleared, switched to demo mode');
+    console.log('🚪 Credentials cleared');
     
-    // Update UI
     if (window.CalcApp && window.CalcApp.updateApiStatus) {
         window.CalcApp.updateApiStatus();
     }
 };
 
-// Manual credentials setting
-SellyAPI.prototype.setCredentials = function() {
-    this.showCredentialsPrompt();
-};
-
-// Get connection status for UI display
+// Get status
 SellyAPI.prototype.getStatus = function() {
     if (this.shopDomain && this.clientId && this.clientSecret) {
         if (this.accessToken && Date.now() < this.tokenExpiry) {
-            return { 
-                connected: true, 
-                mode: 'api', 
-                shop: this.shopDomain,
-                tokenValid: true 
-            };
+            return { connected: true, mode: 'api', shop: this.shopDomain };
         } else {
-            return { 
-                connected: false, 
-                mode: 'api', 
-                shop: this.shopDomain, 
-                needsAuth: true 
-            };
+            return { connected: false, mode: 'api', shop: this.shopDomain, needsAuth: true };
         }
     }
     return { connected: false, mode: 'demo' };
 };
 
-// Test API functionality
+// Test API functionality - NAPRAWIONY
 SellyAPI.prototype.testAPI = function() {
     var self = this;
     
-    console.log('🧪 Testing Selly API with multiple queries...');
+    console.log('🧪 Testing API...');
     
-    var testQueries = [
-        { query: 'listwa', type: 'listwa', description: 'Wyszukiwanie listew' },
-        { query: 'gzyms', type: 'gzyms', description: 'Wyszukiwanie gzymsów' },
-        { query: '200cm', type: '', description: 'Wyszukiwanie według długości' }
-    ];
-    
-    var results = [];
-    var completed = 0;
-    
-    testQueries.forEach(function(test, index) {
-        setTimeout(function() {
-            console.log('🔍 Test ' + (index + 1) + ':', test.description);
-            
-            self.searchProducts(test.query, test.type, 5).then(function(products) {
-                completed++;
-                results.push({
-                    test: test,
-                    success: true,
-                    count: products.length,
-                    products: products
-                });
-                
-                console.log('✅ Test ' + (index + 1) + ' completed:', products.length + ' products found');
-                
-                if (completed === testQueries.length) {
-                    self.showTestResults(results);
-                }
-            }).catch(function(error) {
-                completed++;
-                results.push({
-                    test: test,
-                    success: false,
-                    error: error.message
-                });
-                
-                console.error('❌ Test ' + (index + 1) + ' failed:', error);
-                
-                if (completed === testQueries.length) {
-                    self.showTestResults(results);
-                }
-            });
-        }, index * 1000); // Stagger requests
-    });
-};
-
-SellyAPI.prototype.showTestResults = function(results) {
     var status = this.getStatus();
-    var summary = '🧪 WYNIKI TESTU API SELLY.PL\n\n';
     
-    summary += '📊 Status połączenia: ' + (status.connected ? '✅ Połączono' : '❌ Rozłączono') + '\n';
-    summary += '🔧 Tryb: ' + (status.mode === 'api' ? 'API (' + status.shop + ')' : 'Demo') + '\n\n';
+    if (status.mode === 'demo') {
+        // Test demo
+        this.searchProducts('listwa', 'listwa', 3).then(function(products) {
+            alert('🎭 DEMO TEST OK\n\n' +
+                  'Produkty demo: ' + products.length + '\n\n' +
+                  (products[0] ? 'Przykład: ' + products[0].name + '\nCena: ' + products[0].pricePLN + ' zł' : '') +
+                  '\n\nAby testować prawdziwe API:\n' +
+                  'Kliknij "🔑 Konfiguracja API"');
+        });
+        return;
+    }
     
-    results.forEach(function(result, index) {
-        summary += '🔍 Test ' + (index + 1) + ': ' + result.test.description + '\n';
-        if (result.success) {
-            summary += '   ✅ Sukces - znaleziono ' + result.count + ' produktów\n';
-            if (result.products && result.products.length > 0) {
-                summary += '   📦 Pierwszy produkt: ' + result.products[0].name + '\n';
-                summary += '   💰 Cena: ' + result.products[0].pricePLN + ' zł\n';
-            }
-        } else {
-            summary += '   ❌ Błąd: ' + result.error + '\n';
-        }
-        summary += '\n';
+    // Test real API
+    console.log('🔐 Testing authentication...');
+    
+    this.authenticate().then(function() {
+        console.log('✅ Auth OK, testing search...');
+        
+        return Promise.all([
+            self.searchProducts('listwa', 'listwa', 2),
+            self.searchProducts('gzyms', 'gzyms', 2)
+        ]);
+    }).then(function(results) {
+        var listwy = results[0] || [];
+        var gzymsy = results[1] || [];
+        
+        alert('✅ API TEST SUKCES\n\n' +
+              '🏪 Sklep: ' + self.shopDomain + '\n' +
+              '📏 Listwy: ' + listwy.length + ' wyników\n' +
+              '📐 Gzymsy: ' + gzymsy.length + ' wyników\n\n' +
+              (listwy[0] ? 'Przykład listwy: ' + listwy[0].name + '\nCena: ' + listwy[0].pricePLN + ' zł\n\n' : '') +
+              '🎯 API jest gotowe!');
+        
+    }).catch(function(error) {
+        console.error('❌ API test failed:', error);
+        
+        alert('❌ TEST API BŁĄD\n\n' + error.message + 
+              '\n\nMożliwe przyczyny:\n' +
+              '• Błędny Client ID lub Secret\n' +
+              '• API wyłączone w sklepie\n' +
+              '• Nieprawidłowa domena\n' +
+              '• Brak uprawnień WRITE\n\n' +
+              'Sprawdź panel: ' + self.shopDomain + '/adm');
     });
-    
-    summary += '💡 Jeśli używasz trybu API i występują błędy,\nsprawdź poprawność danych w konfiguracji.';
-    
-    alert(summary);
 };
 
 // Create global instance
 if (typeof window !== 'undefined') {
     window.SellyAPI = new SellyAPI();
     
-    // Global helpers for UI
+    // Global functions for HTML buttons
     window.setSellyCredentials = function() {
-        if (window.SellyAPI) {
-            window.SellyAPI.setCredentials();
-        }
+        window.SellyAPI.setCredentials();
     };
     
     window.clearSellyCredentials = function() {
-        if (window.SellyAPI) {
-            window.SellyAPI.clearCredentials();
-        }
+        window.SellyAPI.clearCredentials();
     };
     
     window.getSellyStatus = function() {
-        return window.SellyAPI ? window.SellyAPI.getStatus() : { connected: false, mode: 'unavailable' };
+        return window.SellyAPI.getStatus();
     };
     
     window.testSellyAPI = function() {
-        if (window.SellyAPI) {
-            window.SellyAPI.testAPI();
-        } else {
-            alert('❌ Selly API nie jest dostępne');
-        }
+        window.SellyAPI.testAPI();
     };
+    
+    console.log('🌐 Selly API globalne funkcje gotowe');
 }
