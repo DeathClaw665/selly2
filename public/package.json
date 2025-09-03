@@ -1,0 +1,14 @@
+{
+  "name": "kalkulator-listew-refactored",
+  "version": "1.0.0",
+  "description": "Refactored calculator for window frames and corners with Selly.pl API integration",
+  "main": "index.html",
+  "scripts": {
+    "start": "python3 -m http.server 3000 2>/dev/null || python -m http.server 3000 2>/dev/null || node -e \"const http=require('http'),fs=require('fs'),path=require('path');http.createServer((req,res)=>{const file=path.join(__dirname,req.url==='/'?'/index.html':req.url);fs.readFile(file,(err,data)=>{if(err){res.writeHead(404);res.end('404');return;}const ext=path.extname(file);const types={'.html':'text/html','.css':'text/css','.js':'text/javascript','.json':'application/json'};res.writeHead(200,{'Content-Type':types[ext]||'text/plain'});res.end(data);});}).listen(3000,()=>console.log('Server running on http://localhost:3000'))\"",
+    "build": "echo 'Static files ready for deployment'",
+    "dev": "npm start"
+  },
+  "keywords": ["calculator", "windows", "frames", "selly", "api", "construction"],
+  "author": "Kalkulator Listew",
+  "license": "MIT"
+}
